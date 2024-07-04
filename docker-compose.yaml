@@ -1,0 +1,57 @@
+version: '3.2'
+
+networks:
+  backend:
+    driver: bridge
+
+services:
+  workspace:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - PHP_VERSION=${PHP_VERSION}
+        - APP_CODE_PATH_CONTAINER=${APP_CODE_PATH_CONTAINER}
+        - PHP_UPSTREAM_PORT=${PHP_UPSTREAM_PORT}
+        - NODE_VERSION=${NODE_VERSION}
+    container_name: ${PROJECT_NAME}-be
+    restart: unless-stopped
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    volumes:
+      - ${APP_CODE_PATH}:${APP_CODE_PATH_CONTAINER}
+      - ./supervisor:/etc/supervisor/conf.d
+    networks:
+      - backend
+
+  nginx:
+    build:
+      context: ./nginx
+      args:
+        - PHP_UPSTREAM_CONTAINER=workspace
+        - PHP_UPSTREAM_PORT=${PHP_UPSTREAM_PORT}
+        - APP_CODE_PATH_CONTAINER=${APP_CODE_PATH_CONTAINER}
+        - http_proxy
+        - https_proxy
+        - no_proxy
+    container_name: ${PROJECT_NAME}-nginx
+    restart: unless-stopped
+    volumes:
+      - ${APP_CODE_PATH}:${APP_CODE_PATH_CONTAINER}
+      - ./nginx/sites:/etc/nginx/sites-available
+      - ./logs/nginx:/var/log/nginx
+    ports:
+      - "${NGINX_HOST_HTTP_PORT}:80"
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    depends_on:
+      - workspace
+    networks:
+      - backend
+  mailcatcher:
+    build: ./mailcatcher
+    ports:
+      - "1025:1025"
+      - "1080:1080"
+    networks:
+      - backend
